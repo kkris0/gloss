@@ -26,6 +26,8 @@ GLOSS_OWNER_PASSWORD_HASH="$HASH" GLOSS_COOKIE_SECURE=false npm run dev
 
 Library → **Goodreads** → *Import a Goodreads CSV*. The importer reads the 31-column export, keeps each row whole on the server, and shows titles, authors, shelves, ratings, status and dates on the library's shelves. It is idempotent (a book is keyed by its Goodreads Book ID), bounded (8 MB, 20,000 rows), and inert: cells are stored and shown as plain text; no formula, link or image in the file is followed. Reviews, notes and comments stay in the database and are never sent to the browser. It brings in no book text, and "currently reading" is what the export said that day, not a live position.
 
+On 2026-10-30 the real 543-row export was imported using the existing `importCatalog` implementation over private Fly SSH after a clean off-Fly backup/restore drill. All 543 rows were added, none skipped or duplicated, and a read-only production count and the catalogue query both returned 543. The original CSV remained untouched and was not committed; the temporary server-side import copy was removed. This verifies the server-side importer, **not** the browser file-upload flow, which the owner should still try on a future export.
+
 ## What AI covers
 
 Questions in the margin and the gloss summary, through Workers AI. Not part of this deployment, and shown as unavailable: reading aloud, painted covers, scanned-PDF page reading, "read it more carefully", and web search.
@@ -53,9 +55,15 @@ After explicit approval on 2026-10-30, `gloss-yorha` was created in the Fly `per
 1. `GLOSS_OWNER_PASSWORD_HASH` was generated privately with `npm run auth:hash`. The container refuses to start without it; the operator has not read the password or hash.
 2. `TS_AUTHKEY` was staged privately for Tailscale bootstrap. The Machine restarted successfully and retained its tailnet name and state file. With the owner's explicit approval, the bootstrap secret was removed. The Machine remained running, the secret name was absent on readback, and tailnet HTTPS health still returned 200 after removal.
 3. The tailnet access policy has **not** been reviewed; a narrow grant allowing the intended owner to `tag:gloss` on `tcp:443` does **not** override an existing broad/wildcard grant. The owner should inspect the effective policy before relying on owner-only tailnet isolation. The application password remains a second gate.
-4. Optionally store all three Cloudflare AI variables listed above; partial AI configuration leaves inference disabled. A live Workers AI call is a separate acceptance step.
+4. As of 2026-10-30 none of `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, or `GLOSS_AI_MODEL` is staged on the Fly app. AI is intentionally disabled until all three are valid; the owner must stage the token privately. A live Workers AI call is still untested.
 
 Never put a password, password hash, auth key, API token, Goodreads export or other credential in Git, an image layer, a command transcript or this file.
+
+### Data recovery after the catalogue import
+
+The `/data/gloss.sqlite` database uses WAL. Before the import, a consistent SQLite backup was made via Node's `node:sqlite.backup()`, transferred over Fly SSH/SFTP to an owner-only off-Fly file (mode `0600`), restored into a separate local database, and checked for integrity, schema version, row count and a synthetic write. The same drill after the import restored a **543-book** copy, and the catalogue query on that restored copy returned 543. The production database was never replaced. The pre/post-import backups are stored outside the repository with owner-only permissions; they contain private library data and login-session metadata, so they need an encrypted long-term backup plan rather than a public/shared location.
+
+A second manual Fly snapshot, `vs_aRB8jem1q9JtMkX4X4OqYGp`, is `created` after the import; automatic volume snapshots retain 14 days. **Restoring a Fly volume from a snapshot has not been drilled** (that would provision another billable volume), and the Tailscale identity on `/data/tailscale` was not copied off Fly. For a future recovery, never run the original and a restored Tailscale state concurrently.
 
 ## Local validation (does not prove live isolation)
 
@@ -71,13 +79,13 @@ sudo -n docker build -f deploy/Dockerfile -t gloss-selfhost:local .
 
 An image smoke test should override the entrypoint so it does not join a tailnet. Start only the custom server with a synthetic test password hash, mount a temporary `/run/gloss`, request `/api/health` and the unauthenticated `/api/catalog` through the Unix socket, and inspect the container network namespace to confirm there is no TCP origin listener. This is a local implementation check; it does not prove tailnet policy, Fly IP allocation, DNS or outside-tailnet reachability.
 
-Local verification on 2026-10-30: 87 tests passed; TypeScript, Next production build, Fly config validation and the ARM64 Docker build passed. A network-disabled container answered health (200) and the home page (200), rejected the unauthenticated catalogue (401), exposed the Unix socket and had no TCP listener. A second container test used only a synthetic password and CSV: login and import succeeded, and five catalogue records remained after container recreation on the same temporary volume. Simulated HTTPS proxy headers produced a Secure `__Host-` cookie; a write without CSRF failed (403) while the CSRF-correct synthetic import succeeded. None of this proves Fly/Tailscale runtime isolation or Cloudflare inference.
+Local verification on 2026-10-30: 96 tests passed; TypeScript, Next production build, Fly config validation and the ARM64 Docker build passed. A network-disabled container answered health (200) and the home page (200), rejected the unauthenticated catalogue (401), exposed the Unix socket and had no TCP listener. A second container test used only a synthetic password and CSV: login and import succeeded, and five catalogue records remained after container recreation on the same temporary volume. Simulated HTTPS proxy headers produced a Secure `__Host-` cookie; a write without CSRF failed (403) while the CSRF-correct synthetic import succeeded. None of this alone proves Fly/Tailscale runtime isolation or Cloudflare inference.
 
 ## Live acceptance (human, after deployment)
 
 Do not call the deployment accepted until a human verifies all of the following against the real accounts:
 
-Verified from Fly and an authorized tailnet peer on 2026-10-30: exactly one running Machine in `fra` with the attached volume, 1 GB RAM and `restart = always`; zero public Fly IPs; Serve points to the Unix socket without Funnel; valid tailnet HTTPS returns health 200 and rejects the unauthenticated catalogue with 401; former TCP origin ports refuse connections. After a Machine restart and removal of the one-time bootstrap key, the same tailnet hostname and HTTPS health endpoint remained available, and the Tailscale state file persisted. Not yet verified: the owner's password login through the live browser, SQLite catalogue persistence with an app-level import, outside-tailnet and unauthorized-peer denial, tailnet ACL/grant policy, or an off-Fly backup/restore drill.
+Verified from Fly and an authorized tailnet peer on 2026-10-30: exactly one running Machine in `fra` with the attached volume, 1 GB RAM and `restart = always`; zero public Fly IPs; Serve points to the Unix socket without Funnel; valid tailnet HTTPS returns health 200 and rejects the unauthenticated catalogue with 401; former TCP origin ports refuse connections. A Machine restart and removal of the one-time bootstrap key retained the same tailnet hostname and Tailscale state. The owner confirmed the password login works, and `tag:gloss` was verified on the node. The 543-row Goodreads import, live catalogue count, off-Fly SQLite backup and separate local restore all passed. **Still not verified:** a browser file upload of a future export, outside-tailnet/unauthorized-peer denial, the full tailnet ACL/grant policy, Fly snapshot-to-volume restore, or a live Cloudflare AI answer.
 
 - Fly reports exactly one running Machine in `fra`, 1 GB RAM, and the expected `gloss_data` volume mounted at `/data`.
 - `fly ips list` reports no public IPv4 or IPv6 addresses, and the effective Fly config reports no public service or ports.
