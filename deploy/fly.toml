@@ -1,4 +1,4 @@
-# One Machine, one volume, no public ingress. Review before use; nothing here has been deployed.
+# One Machine, one volume, no public ingress. First deployed 2026-10-30; review before edits.
 # There is deliberately no [http_service] and no [[services]]: Fly's proxy has nothing to route to,
 # so the app is reachable only through Tailscale Serve (see deploy/entrypoint.sh).
 app = "gloss-yorha"
