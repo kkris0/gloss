@@ -1,9 +1,8 @@
 "use client";
 
-import { useUser } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState, ViewTransition } from "react";
-import { ChevronLeft, ChevronRight, LayoutGrid, Library as LibraryIcon, Search, X } from "lucide-react";
+import { BookMarked, ChevronLeft, LayoutGrid, Library as LibraryIcon, Search, X } from "lucide-react";
 import { TopBar } from "@/components/ui/TopBar";
 import { readingMinutes, tidyTitle, wordCount } from "@/lib/article";
 import { forgetCover, paintAll } from "@/lib/covers";
@@ -20,10 +19,12 @@ import { Arrivals, type Wave } from "./Arrivals";
 import { Glyph } from "./Book";
 import { BookOpen, type Origin } from "./BookOpen";
 import { Shelf } from "./Shelf";
+import { Catalog } from "./Catalog";
+import { Chip, ChipRow } from "./Chips";
 import { Starter } from "./Starter";
 import { TopicGrid, TopicPage } from "./Topics";
 
-type View = "shelf" | "topics";
+type View = "shelf" | "topics" | "catalog";
 
 const SEEN_KEY = "gloss:library-seen";
 /** Samples stay on the shelf until it has this many texts of your own, or for good once opened, unless taken off. */
@@ -38,7 +39,6 @@ const SAMPLES_UNTIL = 6;
  */
 export function Library() {
   const router = useRouter();
-  const { user, isSignedIn } = useUser();
   const hydrate = useStore((s) => s.hydrate);
   const hydrated = useStore((s) => s.hydrated);
   const library = useStore((s) => s.library);
@@ -53,6 +53,7 @@ export function Library() {
   const [only, setOnly] = useState<TopicKey | null>(null);
   const [tag, setTag] = useState<TagKey | null>(null);
   const [sort, setSort] = useState<Sort>("topic");
+  const [catSort, setCatSort] = useState<Sort>("recent");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<{ id: string; origin: Origin } | null>(null);
   const [adding, setAdding] = useState<AddTab | null>(null);
@@ -80,7 +81,7 @@ export function Library() {
   }, []);
   useEffect(() => () => clearTimeout(waveTimer.current), []);
 
-  // Signed in, the shelf is checked every few seconds while it's open, so an agent's saves arrive as you look.
+  // The shelf is checked every few seconds while it's open, so an agent's saves arrive as you look.
   useEffect(() => watchShelf(), []);
 
   // The top bar frosts over once the page moves under it.
@@ -241,8 +242,7 @@ export function Library() {
   );
 
   const openBook = open ? books.find((b) => b.id === open.id) ?? null : null;
-  const first = user?.firstName;
-  const owner = user?.fullName || first || "A Gloss reader";
+  const owner = "A Gloss reader";
   const T = topic ? TOPIC[topic] : null;
   const topicBooks = useMemo(() => (topic ? books.filter((b) => b.topic === topic).sort((a, b) => b.added - a.added).filter(match) : []), [topic, books, match]);
   const screen = topic ? `topic-${topic}` : view;
@@ -283,7 +283,7 @@ export function Library() {
           <section className="lib-hero">
             <div className="lib-hero-row">
               <div className="min-w-0">
-                <h1 className="lib-title">{first ? `${first}'s library` : "Your library"}</h1>
+                <h1 className="lib-title">Your library</h1>
                 {/* Its height is kept while the shelf is read, so the tools below never jump. */}
                 <p className="lib-stats">
                   {hydrated && (
@@ -335,11 +335,11 @@ export function Library() {
           <div className="lib-tools">
             <ViewSwitch view={view} onChange={(v) => go({ view: v })} />
             {searchBox}
-            {view === "shelf" && (
+            {(view === "shelf" || view === "catalog") && (
               <div className="lib-sort" role="radiogroup" aria-label="Arrange by">
                 <span className="px-2 text-[12.5px] text-ink-4 max-md:hidden">Arrange by</span>
-                {SORTS.map((s) => (
-                  <button key={s.key} type="button" role="radio" aria-checked={sort === s.key} onClick={() => setSort(s.key)}>
+                {SORTS.filter((s) => view === "shelf" || s.key !== "topic").map((s) => (
+                  <button key={s.key} type="button" role="radio" aria-checked={(view === "catalog" ? catSort : sort) === s.key} onClick={() => (view === "catalog" ? setCatSort(s.key) : setSort(s.key))}>
                     {s.label}
                   </button>
                 ))}
@@ -394,11 +394,13 @@ export function Library() {
                   <p className="py-6 text-center text-[14px] text-ink-3">Nothing on the shelves matches{q ? <> &ldquo;{q}&rdquo;</> : ""}.</p>
                 )}
                 {hydrated && own.length < SAMPLES_UNTIL ? (
-                  <Starter count={own.length} signedIn={Boolean(isSignedIn)} onAdd={setAdding} />
+                  <Starter count={own.length} onAdd={setAdding} />
                 ) : (
                   hydrated && <p className="lib-hint">Click a spine to take it down. Arrow keys walk the shelf.</p>
                 )}
               </>
+            ) : view === "catalog" ? (
+              <Catalog q={q} sort={catSort} />
             ) : (
               <TopicGrid topics={topics} onPick={(t: Topic) => go({ view: "topics", topic: t.key })} />
             )}
@@ -451,7 +453,7 @@ export function Library() {
           }}
         />
       )}
-      {adding && <AddPanel tab={adding} onTab={setAdding} onClose={() => setAdding(null)} signedIn={Boolean(isSignedIn)} />}
+      {adding && <AddPanel tab={adding} onTab={setAdding} onClose={() => setAdding(null)} />}
     </div>
   );
 }
@@ -464,58 +466,6 @@ function bylineOf(x: { author?: string; source?: string; origin?: string }): str
   return x.origin === "paste" ? "Pasted text" : x.origin === "file" ? "A file" : "Saved";
 }
 
-/**
- * Filters on one line, however many topics there are: the row scrolls, fades
- * at an edge with more beyond it, and offers an arrow there to page along.
- */
-function ChipRow({ label, children }: { label: string; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ l: false, r: false });
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const read = () =>
-      setEdges((e) => {
-        const l = el.scrollLeft > 2;
-        const r = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
-        return e.l === l && e.r === r ? e : { l, r };
-      });
-    read();
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    const mo = new MutationObserver(read);
-    mo.observe(el, { childList: true, subtree: true, characterData: true });
-    el.addEventListener("scroll", read, { passive: true });
-    return () => {
-      ro.disconnect();
-      mo.disconnect();
-      el.removeEventListener("scroll", read);
-    };
-  }, []);
-  const page = (dir: 1 | -1) => ref.current?.scrollBy({ left: dir * Math.max(200, ref.current.clientWidth * 0.6), behavior: "smooth" });
-  return (
-    <div className="lib-chip-row" data-l={edges.l || undefined} data-r={edges.r || undefined}>
-      <div ref={ref} className="lib-chips no-scrollbar" role="group" aria-label={label}>
-        {children}
-      </div>
-      <button type="button" className="lib-chip-page is-l" aria-label="Scroll filters left" tabIndex={-1} onClick={() => page(-1)}>
-        <ChevronLeft size={15} />
-      </button>
-      <button type="button" className="lib-chip-page is-r" aria-label="Scroll filters right" tabIndex={-1} onClick={() => page(1)}>
-        <ChevronRight size={15} />
-      </button>
-    </div>
-  );
-}
-
-function Chip({ on, color, onClick, children }: { on: boolean; color?: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button type="button" aria-pressed={on} onClick={onClick} className="lib-chip" style={color ? { ["--c" as string]: color } : undefined}>
-      {children}
-    </button>
-  );
-}
-
 function ViewSwitch({ view, onChange }: { view: View; onChange: (v: View) => void }) {
   return (
     <div className="lib-switch" role="radiogroup" aria-label="View" data-view={view}>
@@ -525,6 +475,9 @@ function ViewSwitch({ view, onChange }: { view: View; onChange: (v: View) => voi
       </button>
       <button type="button" role="radio" aria-checked={view === "topics"} onClick={() => onChange("topics")}>
         <LayoutGrid size={15} /> Topics
+      </button>
+      <button type="button" role="radio" aria-checked={view === "catalog"} onClick={() => onChange("catalog")}>
+        <BookMarked size={15} /> Goodreads
       </button>
     </div>
   );

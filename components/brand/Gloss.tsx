@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { TogetherLink } from "./Together";
 
 /** Lines of text with a note in the margin: the whole idea in 24px. */
 export function GlossMark({ className = "size-6" }: { className?: string }) {
@@ -14,7 +13,7 @@ export function GlossMark({ className = "size-6" }: { className?: string }) {
 
 /**
  * The wordmark. The serif's line box is set to its own size and nudged so
- * the word's cap height is centered on the mark and the Together logo.
+ * the word's cap height is centered on the mark.
  */
 export function GlossWordmark() {
   return (
@@ -27,15 +26,13 @@ export function GlossWordmark() {
   );
 }
 
-/** The app's mark, a hairline, then Together as the maker. */
+/** The app's mark. */
 export function Lockup({ href = "/" }: { href?: string }) {
   return (
     <div className="flex h-9 items-center gap-3.5 max-[380px]:gap-2.5">
       <Link href={href} aria-label="Gloss, back to your library" className="rounded-md">
         <GlossWordmark />
       </Link>
-      <span aria-hidden className="h-[18px] w-px bg-rule-strong" />
-      <TogetherLink />
     </div>
   );
 }

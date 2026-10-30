@@ -1,0 +1,7 @@
+.git
+.next
+node_modules
+data
+.test-build
+.env*
+*.sqlite*

@@ -4,8 +4,8 @@ import { textToArticle, wordCount, type Article } from "./article";
 import { shelveText } from "./shelving";
 import { savePdf, saveDoc, useStore, type LibraryItem } from "./store";
 
-/** `needKey`: the import needs the reader's own Together key (a long PDF, or free use spent). `file`: the original, kept with a PDF. */
-export type ImportResult = { ok: true; article: Article; file?: Blob } | { ok: false; error: string; needKey?: boolean };
+/** `file`: the original, kept with a PDF. */
+export type ImportResult = { ok: true; article: Article; file?: Blob } | { ok: false; error: string };
 
 /** A link to a PDF is fetched by the server and read here, as if the file had been dropped. */
 export async function importFromUrl(raw: string, onProgress?: (p: number, label?: string) => void): Promise<ImportResult> {
@@ -32,7 +32,7 @@ export async function importFromFile(file: File, onProgress?: (p: number, label?
       try {
         return { ok: true, article: await pdfToArticle(file, onProgress), file };
       } catch (e) {
-        if (e instanceof PdfError) return { ok: false, error: e.message, needKey: e.needKey };
+        if (e instanceof PdfError) return { ok: false, error: e.message };
         throw e;
       }
     }

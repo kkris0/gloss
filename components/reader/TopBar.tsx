@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Keyboard, NotebookPen } from "lucide-react";
 import { Account } from "@/components/account/Account";
 import { Lockup } from "@/components/brand/Gloss";
-import { KeyMenu } from "@/components/ui/KeyMenu";
+import { AiStatus } from "@/components/ui/AiStatus";
 import { ListenButton } from "./Listen";
 import { SettingsMenu } from "@/components/ui/SettingsMenu";
 import { barBtn } from "@/components/ui/Popover";
@@ -123,7 +123,7 @@ export function TopBar({ currentN, pastTitle, listenFrom }: { currentN: number |
           </span>
           <ListenButton from={listenFrom} />
           <SettingsMenu />
-          <KeyMenu />
+          <AiStatus />
           <button
             type="button"
             className={`${barBtn} !px-3 ${notebookOpen ? "bg-sunk text-ink" : ""}`}

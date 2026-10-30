@@ -5,7 +5,7 @@
  *
  * Auth is a personal token from the library ("Connect an agent"), sent as
  * `Authorization: Bearer gls_...`, or as the last part of the URL
- * (usegloss.io/mcp/gls_...) for clients that only take a URL.
+ * (<this server>/mcp/gls_...) for clients that only take a URL.
  */
 
 import { hashToken, looksLikeToken } from "./agent";
@@ -14,7 +14,7 @@ import { blockText, textToArticle, wordCount, type Article } from "./article";
 import { shelfOf, shelveForUser, tokenUser, type ShelfRow } from "./db";
 import { arxivFullText, fetchArticle, notAnArticle } from "./fetch-article";
 import { TOPIC, TOPICS, isTopic, yearOf, type TopicKey } from "./library";
-import { chargeFree, checkFreeUser } from "./quota";
+import { aiEnabled } from "./server/ai";
 import { allow } from "./ratelimit";
 import { classify } from "./shelve";
 import { excerptOf } from "./excerpt";
@@ -25,7 +25,8 @@ const PER_CALL = 25;
 /** About 60,000 words: a long essay or a two-hour transcript, well short of a book. */
 const MAX_TEXT = 400_000;
 const PER_DAY = 1000;
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://usegloss.io";
+/** This instance's own address, from GLOSS_PUBLIC_URL when set (a nonsecret runtime value); otherwise links are relative. */
+const SITE = (process.env.GLOSS_PUBLIC_URL ?? "").replace(/\/+$/, "");
 
 const INSTRUCTIONS = `Gloss is a reader. This server is the reader's own library in Gloss: save articles to it, and look through what is there.
 When saving from social posts or bookmarks, send the URL of the article, essay or paper itself (the link inside the post), not the post. Gloss reads each page in, sorts it onto a topic, and it appears on the reader's shelves the next time they open Gloss.
@@ -123,7 +124,6 @@ export async function handle(req: Request, pathToken?: string): Promise<Response
 
   const header = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
   const token = looksLikeToken(header) ? header : looksLikeToken(pathToken) ? pathToken : null;
-  if (!process.env.DATABASE_URL) return fail(first.id, -32000, "The Gloss library is not available on this server.", 503);
   let who: { userId: string; label: string } | null = null;
   try {
     who = token ? await tokenUser(hashToken(token)) : null;
@@ -248,13 +248,11 @@ function savesLeft(shelf: ShelfRow[]) {
   return PER_DAY - shelf.filter((r) => r.data.addedBy === "agent" && Number(r.data.addedAt) > dayAgo).length;
 }
 
-/** Sort it now, on the reader's own allowance. Out of allowance, it waits in Unsorted and the browser sorts it later. */
+/** Sort it now when the model is set up. Otherwise it waits in Unsorted and the browser sorts it later. */
 async function sortOf(userId: string, a: Article): Promise<{ topic?: TopicKey; tags?: string[]; scene?: string }> {
-  const free = await checkFreeUser(userId);
-  if (!free.ok) return {};
+  if (!aiEnabled()) return {};
   const c = await classify({ title: a.title, author: a.author, source: a.source, dek: a.dek, excerpt: excerptOf(a.blocks) });
   if (!c.ok) return {};
-  await chargeFree(free.subject, c.usd);
   return { topic: c.shelving.topic, scene: c.shelving.scene, tags: c.shelving.tags.length ? c.shelving.tags : undefined };
 }
 

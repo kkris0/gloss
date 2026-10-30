@@ -13,7 +13,7 @@ import { MarkStack } from "./AgentMarks";
  * Under a shelf that is still nearly empty: three ways to fill it. A dozen
  * classics in one click, links of your own, or an agent that shelves for you.
  */
-export function Starter({ count, signedIn, onAdd }: { count: number; signedIn: boolean; onAdd: (tab: AddTab) => void }) {
+export function Starter({ count, onAdd }: { count: number; onAdd: (tab: AddTab) => void }) {
   const [busy, setBusy] = useState<{ done: number; total: number } | null>(null);
   const [failed, setFailed] = useState(0);
 
@@ -74,7 +74,7 @@ export function Starter({ count, signedIn, onAdd }: { count: number; signedIn: b
         </span>
         <span className="starter-title">Let your agent shelve for you</span>
         <span className="starter-body">
-          Give Grok Bot, Claude or ChatGPT your library, and ask it to save the good articles from your bookmarks.{!signedIn && " Needs an account."}
+          Give Grok Bot, Claude or ChatGPT your library, and ask it to save the good articles from your bookmarks.
         </span>
       </button>
     </section>

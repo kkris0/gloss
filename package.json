@@ -7,16 +7,15 @@
     "build": "next build",
     "start": "next start --port 3100",
     "lint": "tsc --noEmit",
-    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
+    "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
+    "auth:hash": "node scripts/hash-password.mjs"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.9.13",
     "@llamaindex/liteparse-wasm": "2.15.1",
     "@mozilla/readability": "^0.6.0",
-    "@neondatabase/serverless": "^1.2.0",
     "linkedom": "^0.18.13",
     "lucide-react": "^1.53.0",
-    "next": "^16.4.0",
+    "next": "^16.4.3",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"

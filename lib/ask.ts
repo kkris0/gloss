@@ -7,16 +7,6 @@ import { uid, useStore, type Anchor, type Gloss, type Turn } from "./store";
 import type { ModelKey, StreamEvent, Usage } from "./models";
 import { MODELS, modelOf } from "./models";
 
-const KEY_STORAGE = "together:api-key";
-
-export function readApiKey(): string {
-  try {
-    return localStorage.getItem(KEY_STORAGE) ?? "";
-  } catch {
-    return "";
-  }
-}
-
 const controllers = new Map<string, AbortController>();
 
 export function stopGloss(id: string) {
@@ -57,13 +47,11 @@ async function stream(ix: DocIndex, glossId: string, modelKey: ModelKey) {
   const update = (fn: (t: Turn) => Turn) => useStore.getState().updateGloss(articleId, glossId, (x) => lastAssistant(x, fn));
 
   try {
-    const apiKey = readApiKey();
     const res = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal: ctrl.signal,
       body: JSON.stringify({
-        apiKey: apiKey || undefined,
         model: modelKey,
         length: st.settings.length,
         doc: docPayload(ix, g.anchor?.start.b ?? g.at),
@@ -72,10 +60,9 @@ async function stream(ix: DocIndex, glossId: string, modelKey: ModelKey) {
         search: st.settings.search,
       }),
     });
-    noteFree(res);
     if (!res.ok || !res.body) {
-      const { error, needKey } = await failure(res);
-      update((t) => ({ ...t, streaming: false, error, needKey }));
+      const { error } = await failure(res);
+      update((t) => ({ ...t, streaming: false, error }));
       return;
     }
     const reader = res.body.getReader();
@@ -186,48 +173,26 @@ export async function fetchBrief(ix: DocIndex) {
   const modelKey = modelOf(st.settings.model);
   st.setBrief(id, { status: "loading" });
   try {
-    const apiKey = readApiKey();
     const res = await fetch("/api/brief", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: apiKey || undefined, model: modelKey, doc: docPayload(ix) }),
+      body: JSON.stringify({ model: modelKey, doc: docPayload(ix) }),
     });
-    noteFree(res);
     const j = (await res.json()) as { brief?: BriefData; usage?: Usage; error?: string; code?: string };
     if (j.brief) useStore.getState().setBrief(id, { status: "ready", data: j.brief, usage: j.usage, modelKey, at: Date.now() });
-    else useStore.getState().setBrief(id, { status: "error", error: j.error ?? "Could not write the gloss.", needKey: j.code === "need_key" });
+    else useStore.getState().setBrief(id, { status: "error", error: j.error ?? "Could not write the gloss." });
   } catch (e) {
     useStore.getState().setBrief(id, { status: "error", error: `Connection lost: ${String(e)}` });
   }
 }
 
-/** Tell the key menu how many free answers are left today, when the server says. */
-function noteFree(res: Response) {
-  const left = res.headers.get("X-Free-Left");
-  if (left !== null) window.dispatchEvent(new CustomEvent("gloss:free", { detail: Number(left) }));
-}
-
-/** A failed request's message, and whether the fix is the reader's own key. */
-async function failure(res: Response): Promise<{ error: string; needKey: boolean }> {
+/** A failed request's message. */
+async function failure(res: Response): Promise<{ error: string }> {
   try {
-    const j = (await res.json()) as { error?: string; code?: string };
-    return { error: j.error ?? `Request failed (${res.status}).`, needKey: j.code === "need_key" };
+    const j = (await res.json()) as { error?: string };
+    return { error: j.error ?? `Request failed (${res.status}).` };
   } catch {
-    return { error: `Request failed (${res.status}).`, needKey: false };
-  }
-}
-
-/** Open the key menu in the top bar, from anywhere. */
-export function openKeyMenu() {
-  window.dispatchEvent(new Event("gloss:key"));
-}
-
-export async function validateKey(key: string): Promise<boolean> {
-  try {
-    const res = await fetch("/api/key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ apiKey: key }) });
-    return ((await res.json()) as { ok?: boolean }).ok === true;
-  } catch {
-    return false;
+    return { error: `Request failed (${res.status}).` };
   }
 }
 
@@ -242,14 +207,12 @@ export async function streamAsk(
 ) {
   let full = "";
   try {
-    const apiKey = readApiKey();
     const res = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       signal,
-      body: JSON.stringify({ ...body, apiKey: apiKey || undefined, model: modelOf(useStore.getState().settings.model) }),
+      body: JSON.stringify({ ...body, model: modelOf(useStore.getState().settings.model) }),
     });
-    noteFree(res);
     if (!res.ok || !res.body) {
       on.error?.((await failure(res)).error);
       return;

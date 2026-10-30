@@ -65,6 +65,7 @@ export function BookOpen({
   onRead,
   onShelve,
   onRemove,
+  readOnly,
 }: {
   book: Book;
   origin: Origin;
@@ -73,6 +74,8 @@ export function BookOpen({
   onRead: (b: Book) => void;
   onShelve: (b: Book, patch: { topic?: TopicKey; favorite?: boolean; title?: string }) => void;
   onRemove: (b: Book) => void;
+  /** A catalogue entry (metadata from a Goodreads export): nothing to read, move or rename. */
+  readOnly?: { label: string; progress: string; note: string };
 }) {
   const [g] = useState(() => measure(book));
   const [phase, setPhase] = useState<"in" | "open" | "out" | "leaving">("in");
@@ -199,6 +202,12 @@ export function BookOpen({
               <div className="ob-page-in scroll-thin">
                 <div className="ob-kicker">
                   {/* The topic it is shelved under, and the way to move it: one chip. */}
+                  {readOnly ? (
+                    <span className="ob-chip" style={{ ["--c" as string]: t.shades[0] }}>
+                      <Glyph k={t.key} size={15} />
+                      <span>{readOnly.label}</span>
+                    </span>
+                  ) : (
                   <label className="ob-chip" style={{ ["--c" as string]: t.shades[0] }} data-tip="Move to another topic">
                     <Glyph k={t.key} size={15} />
                     <span>{t.name}</span>
@@ -211,7 +220,8 @@ export function BookOpen({
                       ))}
                     </select>
                   </label>
-                  <span className="ob-tools">
+                  )}
+                  {!readOnly && <span className="ob-tools">
                     <button
                       type="button"
                       className="ob-icon"
@@ -236,7 +246,7 @@ export function BookOpen({
                     >
                       <Trash2 size={14} />
                     </button>
-                  </span>
+                  </span>}
                 </div>
                 {renaming ? (
                   <TitleField
@@ -246,7 +256,7 @@ export function BookOpen({
                       if (title && title !== book.title) onShelve(book, { title });
                     }}
                   />
-                ) : book.sample ? (
+                ) : book.sample || readOnly ? (
                   <h2 className="ob-title">{book.title}</h2>
                 ) : (
                   <h2 className="ob-title">
@@ -288,15 +298,19 @@ export function BookOpen({
                     <span style={{ width: `${Math.round(book.pct * 100)}%` }} />
                   </span>
                   <span>
-                    {book.pct >= 1 ? "Read" : reading ? `${Math.round(book.pct * 100)}% read` : "Not started"}
+                    {readOnly ? readOnly.progress : book.pct >= 1 ? "Read" : reading ? `${Math.round(book.pct * 100)}% read` : "Not started"}
                     {book.highlights > 0 && ` · ${book.highlights} highlight${book.highlights === 1 ? "" : "s"}`}
                   </span>
                 </div>
                 <div className="ob-actions">
-                  <button ref={readRef} type="button" onClick={read} className="ob-read">
-                    {book.pct >= 1 ? "Read again" : reading ? "Continue reading" : "Start reading"}
-                    <ArrowRight size={16} />
-                  </button>
+                  {readOnly ? (
+                    <p className="ob-dek">{readOnly.note}</p>
+                  ) : (
+                    <button ref={readRef} type="button" onClick={read} className="ob-read">
+                      {book.pct >= 1 ? "Read again" : reading ? "Continue reading" : "Start reading"}
+                      <ArrowRight size={16} />
+                    </button>
+                  )}
                   <div className="ob-sub">
                     {book.url ? (
                       <a href={book.url} target="_blank" rel="noreferrer" className="ob-link">

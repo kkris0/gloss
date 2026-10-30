@@ -2,7 +2,6 @@
 
 import type { LayoutBlock } from "@llamaindex/liteparse-wasm";
 import { inlineMd, markdownBlocks, slugify, tidyTitle, undash, type Article, type Block } from "./article";
-import { readApiKey } from "./ask";
 
 /**
  * PDF to Gloss blocks, in two passes.
@@ -14,11 +13,10 @@ import { readApiKey } from "./ask";
  *    glyphs) are rendered and read by a vision model on the server
  *    (/api/pdf-page), a few at a time.
  *
- * Longer PDFs need the reader's own Together key: every question sends the
- * whole text, so a book would spend a day's free use in a few questions.
+ * Scanned pages need a hosted vision model, which this deployment does not
+ * use: they are left as they are, and the reader is told.
  */
 
-export const PDF_FREE_PAGES = 20;
 export const PDF_MAX_PAGES = 400;
 const WASM = "/liteparse-2.15.1.wasm";
 /** The complexity reasons that mean the text layer is missing or unusable. Others ("vector-text") are noise for prose. */
@@ -32,14 +30,7 @@ const BROKEN = /[\ufffd\ue000-\uf8ff]/g;
 /** Long side of a page image sent to the vision model, in pixels. */
 const VISION_PX = 1600;
 
-export class PdfError extends Error {
-  constructor(
-    message: string,
-    readonly needKey = false
-  ) {
-    super(message);
-  }
-}
+export class PdfError extends Error {}
 
 export type PdfProgress = (pct: number, label?: string) => void;
 
@@ -71,10 +62,6 @@ export async function pdfToArticle(file: File, onProgress?: PdfProgress): Promis
   const total = session.totalPages;
   const pages = Math.min(total, PDF_MAX_PAGES);
   const label = `${pages} page${pages === 1 ? "" : "s"}`;
-  if (pages > PDF_FREE_PAGES && !readApiKey()) {
-    session.free();
-    throw new PdfError(`This PDF has ${pages} pages. PDFs over ${PDF_FREE_PAGES} pages use your own Together key, since every question sends the whole text.`, true);
-  }
 
   // Pass 1: the text layer, a batch at a time.
   onProgress?.(0, `Reading ${label}`);
@@ -261,7 +248,6 @@ async function pageImage(png: Uint8Array): Promise<string> {
 }
 
 async function readByVision(lp: LP, bytes: Uint8Array, pageNums: number[], into: Map<number, Block[]>, onProgress?: PdfProgress) {
-  const apiKey = readApiKey() || undefined;
   let done = 0;
   let stop: PdfError | null = null;
   const label = () => `Reading ${pageNums.length === 1 ? "a scanned page" : `scanned pages, ${done} of ${pageNums.length}`}`;
@@ -282,11 +268,11 @@ async function readByVision(lp: LP, bytes: Uint8Array, pageNums: number[], into:
           const res = await fetch("/api/pdf-page", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image: await pageImage(new Uint8Array(s.imageBytes)), apiKey }),
+            body: JSON.stringify({ image: await pageImage(new Uint8Array(s.imageBytes)) }),
           });
           const j = (await res.json()) as { markdown?: string; error?: string; code?: string };
           if (j.markdown) into.set(s.pageNum, markdownBlocks(htmlTablesToMarkdown(j.markdown)));
-          else if (j.code === "need_key") stop = new PdfError(j.error ?? "Add your Together key to read scanned pages.", true);
+          else if (j.code === "unsupported" || j.code === "need_key") stop = new PdfError(j.error ?? "Reading scanned pages is not available on this server.");
         } catch {}
         done++;
         onProgress?.(done / pageNums.length, label());

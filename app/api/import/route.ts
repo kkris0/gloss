@@ -1,9 +1,12 @@
 import { fetchArticle } from "@/lib/fetch-article";
+import { owner } from "@/lib/server/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
+  const g = owner(req);
+  if (!g.ok) return g.res;
   // `pdf`: the caller can read a PDF in the browser, so a PDF link comes back as the file.
   let body: { url?: string; pdf?: boolean };
   try {

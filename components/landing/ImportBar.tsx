@@ -2,7 +2,6 @@
 
 import { forwardRef } from "react";
 import { ArrowRight, BookmarkPlus, FileUp, Link2, TextCursorInput } from "lucide-react";
-import { openKeyMenu } from "@/lib/ask";
 
 export type Busy = null | { label: string; pct?: number };
 
@@ -11,8 +10,6 @@ type Props = {
   setUrl: (v: string) => void;
   busy: Busy;
   error: string | null;
-  /** The error is fixed by the reader's own Together key: offer the key menu. */
-  errorNeedsKey?: boolean;
   onSubmit: (url: string) => void;
   /** Keep it in the library for later, instead of reading it now. */
   onSave: (url: string) => void;
@@ -21,7 +18,7 @@ type Props = {
 };
 
 /** The one thing to do on the landing page: give it something to read. */
-export const ImportBar = forwardRef<HTMLInputElement, Props>(function ImportBar({ url, setUrl, busy, error, errorNeedsKey, onSubmit, onSave, onPickFile, onPasteText }, ref) {
+export const ImportBar = forwardRef<HTMLInputElement, Props>(function ImportBar({ url, setUrl, busy, error, onSubmit, onSave, onPickFile, onPasteText }, ref) {
   return (
     <div className="mt-10 w-full max-w-[600px] text-left sm:mt-12">
       <form
@@ -86,14 +83,6 @@ export const ImportBar = forwardRef<HTMLInputElement, Props>(function ImportBar(
       {error && (
         <p className="mx-auto mt-4 max-w-[34rem] text-center text-[13.5px] leading-snug text-rubric-text" role="alert">
           {error}
-          {errorNeedsKey && (
-            <>
-              {" "}
-              <button type="button" onClick={openKeyMenu} className="font-medium text-ink underline decoration-rule-strong underline-offset-4">
-                Add your Together key
-              </button>
-            </>
-          )}
         </p>
       )}
     </div>

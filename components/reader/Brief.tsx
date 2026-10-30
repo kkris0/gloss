@@ -1,9 +1,8 @@
 "use client";
 
-import { Show, SignInButton } from "@clerk/nextjs";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowRight, ChevronDown, RotateCcw } from "lucide-react";
-import { fetchBrief, openKeyMenu } from "@/lib/ask";
+import { fetchBrief } from "@/lib/ask";
 import type { DocIndex } from "@/lib/doc";
 import { MODELS, modelOf } from "@/lib/models";
 import { useStore } from "@/lib/store";
@@ -48,20 +47,6 @@ export function Brief() {
     return (
       <div className="mt-6 flex flex-wrap items-center gap-3 rounded-[16px] border border-rule px-4 py-3.5 text-[13.5px]">
         <p className="text-rubric-text">{brief.error}</p>
-        {brief.needKey && (
-          <>
-            <button type="button" onClick={openKeyMenu} className="font-medium text-ink underline decoration-rule-strong underline-offset-4">
-              Add your Together key
-            </button>
-            <Show when="signed-out">
-              <SignInButton mode="modal">
-                <button type="button" className="font-medium text-ink underline decoration-rule-strong underline-offset-4">
-                  Sign in
-                </button>
-              </SignInButton>
-            </Show>
-          </>
-        )}
         <button type="button" onClick={() => fetchBrief(ix)} className="font-medium text-ink underline decoration-rule-strong underline-offset-4">
           Try again
         </button>

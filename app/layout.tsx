@@ -1,12 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Atkinson_Hyperlegible_Next, Literata, Newsreader, Schibsted_Grotesk } from "next/font/google";
 import { BOOT_SCRIPT } from "@/lib/settings";
 import "./globals.css";
 import { Tooltips } from "@/components/ui/Tooltips";
-import { ClerkProvider } from "@clerk/nextjs";
 import { SyncAgent } from "@/components/account/SyncAgent";
-import { OG_IMAGE, SITE_URL } from "@/lib/brand";
 
 const serif = Newsreader({
   subsets: ["latin", "latin-ext"],
@@ -41,15 +38,14 @@ const legible = Atkinson_Hyperlegible_Next({
   adjustFontFallback: false,
 });
 
-const DESCRIPTION = "Highlight any line and ask it anything. An open model writes the answer in the margin, beside the words, citing the paragraphs it used.";
+const DESCRIPTION = "Highlight any line and ask it anything. The answer is written in the margin, beside the words, citing the paragraphs it used.";
 
+// A private instance: no social card, no canonical origin, nothing for a crawler or a link preview.
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
   title: { default: "Gloss", template: "%s" },
   description: DESCRIPTION,
   applicationName: "Gloss",
-  openGraph: { type: "website", siteName: "Gloss", title: "Gloss", description: DESCRIPTION, url: "/", images: [OG_IMAGE] },
-  twitter: { card: "summary_large_image", title: "Gloss", description: DESCRIPTION, images: [OG_IMAGE.url] },
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {
@@ -59,22 +55,6 @@ export const viewport: Viewport = {
   ],
 };
 
-/** Clerk's sign-in and account screens, in the page's own ink and paper, in every theme. */
-const CLERK_APPEARANCE = {
-  variables: {
-    colorPrimary: "var(--ink)",
-    colorBackground: "var(--bg-raised)",
-    colorForeground: "var(--ink)",
-    colorMutedForeground: "var(--ink-3)",
-    colorInput: "var(--bg)",
-    colorInputForeground: "var(--ink)",
-    colorBorder: "var(--rule-strong)",
-    colorNeutral: "var(--ink)",
-    fontFamily: "var(--font-sans)",
-    borderRadius: "12px",
-  },
-};
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable} ${book.variable} ${legible.variable}`} suppressHydrationWarning>
@@ -82,13 +62,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
       </head>
       <body>
-        <ClerkProvider appearance={CLERK_APPEARANCE}>
-          {children}
-          <SyncAgent />
-        </ClerkProvider>
+        {children}
+        <SyncAgent />
         <Tooltips />
-        {/* Plausible: cookieless page views, from the production site only, so previews and local runs never count. */}
-        {process.env.VERCEL_ENV === "production" && <Script defer data-domain="usegloss.io" src="https://plausible.io/js/script.js" strategy="afterInteractive" />}
       </body>
     </html>
   );

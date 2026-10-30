@@ -1,14 +1,14 @@
-import { auth } from "@clerk/nextjs/server";
+import { owner } from "@/lib/server/guard";
 import { isCollection, pullRows, pushRows, type Collection, type PushRow } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-/** Vercel caps a request body at 4.5MB; the client batches below this. */
+/** The client batches below this. */
 const MAX_BODY = 4_400_000;
 const MAX_ROWS = 2000;
 const MAX_DATA = 256_000;
 
-type InRow = { id: string; articleId: string; data: unknown; deleted?: boolean; doc?: unknown };
+type InRow = { id: string; articleId: string; data: unknown; deleted?: boolean; doc?: unknown; baseVersion?: unknown };
 
 /**
  * Pull: every row of the signed-in reader's that changed since `since`,
@@ -16,17 +16,23 @@ type InRow = { id: string; articleId: string; data: unknown; deleted?: boolean; 
  * time from /api/articles/[id], so a big shelf never makes a huge response.
  */
 export async function GET(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return Response.json({ error: "Sign in to sync." }, { status: 401 });
+  const g = owner(req);
+  if (!g.ok) return g.res;
+  const { userId } = g;
   const raw = new URL(req.url).searchParams.get("since");
   const since = raw && !Number.isNaN(Date.parse(raw)) ? new Date(raw).toISOString() : "1970-01-01T00:00:00Z";
-  return Response.json(await pullRows(userId, since));
+  return Response.json(pullRows(userId, since), { headers: { "Cache-Control": "private, no-store" } });
 }
 
-/** Push: upsert the rows a device changed. */
+/**
+ * Push: write the rows a device changed, each against the version the device last saw. A row the
+ * server has since changed is left alone and comes back under `conflicts` with the server's copy
+ * (status 409, though every other row in the push is still written and listed under `applied`).
+ */
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return Response.json({ error: "Sign in to sync." }, { status: 401 });
+  const g = owner(req);
+  if (!g.ok) return g.res;
+  const { userId } = g;
   if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY) return Response.json({ error: "Too large." }, { status: 413 });
 
   let body: { changes?: Record<string, InRow[]> };
@@ -45,13 +51,16 @@ export async function POST(req: Request) {
       article_id: r.articleId,
       data: r.deleted ? {} : r.data,
       deleted: Boolean(r.deleted),
+      // Anything but a whole number counts as "never saw it", which only a row the server lacks accepts.
+      baseVersion: Number.isInteger(r.baseVersion) ? (r.baseVersion as number) : undefined,
       ...(table === "articles" ? { doc: r.deleted ? null : r.doc ?? null } : {}),
     }));
     count += changes[table].length;
   }
   if (count > MAX_ROWS) return Response.json({ error: "Too many rows in one push." }, { status: 413 });
-  await pushRows(userId, changes);
-  return Response.json({ ok: true, count });
+  const { applied, conflicts } = pushRows(userId, changes);
+  if (conflicts.length) return Response.json({ ok: false, count, applied, conflicts }, { status: 409 });
+  return Response.json({ ok: true, count, applied, conflicts });
 }
 
 function valid(r: InRow): boolean {

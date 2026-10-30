@@ -8,7 +8,6 @@ import { displayArticle, isHeading, readingMinutes, titleClass, type Article } f
 import { ARTICLE_QUESTIONS } from "@/lib/actions";
 import { SAMPLE_QUESTIONS } from "@/lib/samples";
 import { fetchBrief } from "@/lib/ask";
-import { BRAND } from "@/lib/brand";
 import { indexArticle } from "@/lib/doc";
 import { fetchText } from "@/lib/sync";
 import { loadDoc, useGlosses, useHighlights, useStore, type Anchor } from "@/lib/store";
@@ -16,13 +15,11 @@ import { applySettings } from "@/lib/settings";
 import { GlossWordmark } from "@/components/brand/Gloss";
 import { Block, type Mark } from "./Block";
 import { Brief } from "./Brief";
-import { CarefulRead } from "./CarefulRead";
 import { Composer, type ComposerHandle } from "./Composer";
 import { ReaderContext, useMedia, useReader, type ReaderApi } from "./context";
 import { GlossCard } from "./GlossCard";
 import { Lens, type OpenHighlight } from "./Lens";
 import { ListenBar } from "./Listen";
-import { SignInNudge } from "@/components/account/SignInNudge";
 import { Margin } from "./Margin";
 import { Notebook } from "./Notebook";
 import { Peek, Shortcuts, Toast } from "./Overlays";
@@ -80,7 +77,7 @@ export function Reader({ id, initial }: { id: string; initial: Article | null })
         <div>
           <GlossWordmark />
           <p className="mt-6 font-serif text-[26px] text-ink">This text is not on this device.</p>
-          <p className="mt-2 text-[14px] text-ink-3">Imported texts live in the browser that imported them, or in your account when you are signed in.</p>
+          <p className="mt-2 text-[14px] text-ink-3">Imported texts live in the browser that imported them, until they sync to this server.</p>
           <Link href="/" className="mt-6 inline-flex h-10 items-center rounded-full bg-ink px-5 text-[14px] font-medium text-bg">
             Back to the library
           </Link>
@@ -526,7 +523,6 @@ function ReaderInner({ article }: { article: Article }) {
                     </a>
                   )}
                 </div>
-                <CarefulRead article={article} />
                 <div className="focus-hide rise" style={{ animationDelay: "200ms" }}>
                   <Brief />
                 </div>
@@ -556,13 +552,6 @@ function ReaderInner({ article }: { article: Article }) {
                   ❦
                 </p>
                 {article.source && <p>From {article.source}.</p>}
-                <p className="mt-1">
-                  Glosses are powered by DeepSeek V4.1 Flash, served by{" "}
-                  <a href={BRAND.togetherUrl} target="_blank" rel="noopener noreferrer" className="text-ink-2 underline decoration-rule-strong underline-offset-4 hover:text-ink">
-                    Together AI
-                  </a>
-                  .
-                </p>
                 <div className="mt-6 flex flex-wrap gap-2">
                   <button type="button" onClick={() => setUI({ notebookOpen: true })} className="h-9 rounded-full border border-rule px-4 text-[13px] font-medium text-ink-2 hover:border-rule-strong hover:text-ink">
                     Open your notebook
@@ -592,7 +581,6 @@ function ReaderInner({ article }: { article: Article }) {
 
         <Lens rootEl={articleEl} openHighlight={openHl} />
         <ListenBar />
-        <SignInNudge />
         <Notebook />
         <Peek peek={peek} />
         <Shortcuts />

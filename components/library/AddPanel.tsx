@@ -1,6 +1,5 @@
 "use client";
 
-import { SignInButton } from "@clerk/nextjs";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BookOpen, BookmarkPlus, Check, Copy, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -16,7 +15,7 @@ export type AddTab = "links" | "agent";
  * Adding to the library: paste links (one or many), or connect an agent that
  * saves to it through the Gloss MCP server.
  */
-export function AddPanel({ tab, onTab, onClose, signedIn }: { tab: AddTab; onTab: (t: AddTab) => void; onClose: () => void; signedIn: boolean }) {
+export function AddPanel({ tab, onTab, onClose }: { tab: AddTab; onTab: (t: AddTab) => void; onClose: () => void }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -50,7 +49,7 @@ export function AddPanel({ tab, onTab, onClose, signedIn }: { tab: AddTab; onTab
             <X size={17} />
           </button>
         </header>
-        {tab === "links" ? <Links /> : <Agent signedIn={signedIn} />}
+        {tab === "links" ? <Links /> : <Agent />}
       </section>
     </div>,
     document.body
@@ -230,7 +229,7 @@ function Links() {
 function Bookmarklets() {
   const readRef = useRef<HTMLAnchorElement>(null);
   const saveRef = useRef<HTMLAnchorElement>(null);
-  const [origin, setOrigin] = useState("https://usegloss.io");
+  const [origin, setOrigin] = useState("");
   const code = (param: "url" | "save") => `javascript:void(window.open('${origin}/?${param}='+encodeURIComponent(location.href)))`;
   useEffect(() => setOrigin(window.location.origin), []);
   // React refuses javascript: links in JSX, so they are set by hand.
@@ -271,34 +270,20 @@ const LABELS: { label: string; mark?: AgentMark }[] = [
   { label: "Other" },
 ];
 
-function Agent({ signedIn }: { signedIn: boolean }) {
+function Agent() {
   const [conns, setConns] = useState<Conn[] | null>(null);
   const [made, setMade] = useState<{ token: string; label: string } | null>(null);
   const [label, setLabel] = useState("Grok Bot");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://usegloss.io";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
-    if (!signedIn) return;
     fetch("/api/agent-tokens")
       .then((r) => r.json())
       .then((j: { tokens?: Conn[] }) => setConns(j.tokens ?? []))
       .catch(() => setConns([]));
-  }, [signedIn]);
-
-  if (!signedIn)
-    return (
-      <div className="mt-5">
-        <AgentIntro />
-        <p className="mt-4 text-[13.5px] text-ink-2">An agent saves to the library in your account, so it needs you signed in.</p>
-        <SignInButton mode="modal">
-          <button type="button" className="add-btn mt-4">
-            Sign in to connect
-          </button>
-        </SignInButton>
-      </div>
-    );
+  }, []);
 
   const create = async () => {
     setBusy(true);

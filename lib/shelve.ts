@@ -7,7 +7,8 @@
 
 import { cleanTags, TOPICS, topicOf, type Shelving } from "./library";
 import { EXCERPT_CHARS } from "./excerpt";
-import { completeJSON, DEFAULT_MODEL } from "./together";
+import { DEFAULT_MODEL } from "./models";
+import { completeJSON } from "./server/ai";
 
 export type ShelveInput = { title: string; author?: string; source?: string; dek?: string; excerpt?: string };
 
@@ -26,7 +27,7 @@ Reply with JSON only: {"topic": "<key>", "tags": ["..."], "scene": "..."}`;
 
 export async function classify(
   input: ShelveInput,
-  opts: { apiKey?: string; signal?: AbortSignal } = {}
+  opts: { signal?: AbortSignal } = {}
 ): Promise<{ ok: true; shelving: Shelving; usd: number } | { ok: false; error: string }> {
   const lines = [
     `Title: ${input.title}`,
@@ -37,7 +38,6 @@ export async function classify(
   ].filter(Boolean);
   const r = await completeJSON<{ topic?: unknown; tags?: unknown; scene?: unknown }>({
     model: DEFAULT_MODEL,
-    apiKey: opts.apiKey,
     signal: opts.signal,
     maxTokens: 220,
     messages: [

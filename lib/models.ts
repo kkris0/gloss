@@ -1,8 +1,3 @@
-/**
- * The model allow-list and wire types. Safe to import on the client: no keys,
- * no fetches. lib/together.ts does the network side.
- */
-
 export type ModelEntry = {
   id: string;
   label: string;
@@ -14,29 +9,21 @@ export type ModelEntry = {
 };
 
 /**
- * The allow-list. Route and UI both read it. Bake-off 2026-10-09: 3 sample
- * texts x 8 tasks on the real prompts, answers scored blind by a judge.
- *   V4.1 Flash  0.23s to first token, $0.0006 an answer, 7.3/10, best in 11 of 24
- *   V4 Pro      0.58s, $0.0052, 6.5/10
- *   Kimi K3     0.86s, $0.0096, 6.3/10 (best gloss summaries, weak on Related)
- *   GLM-5.3     0.36s at reasoning_effort low, $0.0048, 6.3/10, 3 of the 4 factual errors
- * GLM-5.3 ignores every thinking-off flag (default effort: a 60s summary).
- * Also left out: Qwen3.8 (prints its reasoning into content with thinking off).
- *
- * Flash won on quality as well as speed and cost, so it answers everything:
- * there was a "Deep" choice (V4 Pro, then Kimi K3) and it was dropped
- * 2026-10-09. Older answers and settings may still name "pro"; anything that
- * looks a model up goes through modelOf(), which falls back to Flash.
+ * The model list. One entry: the model itself is whatever GLOSS_AI_MODEL names
+ * on the server (a Cloudflare Workers AI model id), so the browser never sees
+ * a model id, a price or a key. The old Together models, their per-token
+ * prices and the "Deep" choice are gone; `modelOf()` still folds any saved
+ * setting onto the one entry.
  */
 export const MODELS = {
   flash: {
-    id: "deepseek-ai/DeepSeek-V4.1-Flash",
-    label: "DeepSeek V4.1 Flash",
+    id: "workers-ai",
+    label: "Workers AI",
     short: "Quick",
-    blurb: "Answers in about half a second. Best for most questions.",
-    inPerM: 0.3,
-    cachedPerM: 0.006,
-    outPerM: 1.2,
+    blurb: "Answers from the model your server is set up with.",
+    inPerM: 0,
+    cachedPerM: 0,
+    outPerM: 0,
   },
 } as const satisfies Record<string, ModelEntry>;
 
@@ -63,6 +50,12 @@ export function costFor(key: ModelKey, prompt: number, cached: number, completio
   const fresh = Math.max(0, prompt - cached);
   return (fresh * m.inPerM + cached * m.cachedPerM + completion * m.outPerM) / 1_000_000;
 }
+
+export type ToolCall = { id: string; type: "function"; function: { name: string; arguments: string } };
+export type ChatMessage =
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string | null; tool_calls?: ToolCall[] }
+  | { role: "tool"; content: string; tool_call_id: string };
 
 /** A web result an answer can cite as [n]. */
 export type Source = { n: number; title: string; url: string; site: string; date?: string };

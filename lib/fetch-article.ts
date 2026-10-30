@@ -11,7 +11,7 @@ import { imageStem, leadImage, prepareImages } from "@/lib/images";
 import { Readability } from "@mozilla/readability";
 import { htmlToBlocks } from "@/lib/html-to-blocks";
 import { slugify, tidyTitle, undash, type Article, type Block } from "@/lib/article";
-import { APP_UA } from "@/lib/together";
+import { APP_UA } from "@/lib/server/ai";
 
 const MAX_BYTES = 6_000_000;
 const MAX_PDF_BYTES = 25_000_000;

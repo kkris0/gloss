@@ -8,7 +8,6 @@
  */
 
 import type { Article } from "./article";
-import { readApiKey } from "./ask";
 import type { Shelving } from "./library";
 import { excerptOf } from "./excerpt";
 import { loadDoc, useStore, type LibraryItem } from "./store";
@@ -26,13 +25,15 @@ export async function shelveText(a: Text): Promise<void> {
     const res = await fetch("/api/shelve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: a.title, author: a.author, source: a.source, dek: a.dek, excerpt: a.blocks ? excerptOf(a.blocks) : undefined, apiKey: readApiKey() || undefined }),
+      body: JSON.stringify({ title: a.title, author: a.author, source: a.source, dek: a.dek, excerpt: a.blocks ? excerptOf(a.blocks) : undefined }),
     });
-    if (res.status === 429 || res.status === 401) {
-      const j = (await res.json().catch(() => ({}))) as { code?: string };
-      // Spent for today, or no key at all: rest. A burst limit just means slow down.
-      if (j.code === "need_key") resting = true;
-      else await new Promise((r) => setTimeout(r, 15_000));
+    if (res.status === 503) {
+      // The model is not set up on this server: texts stay in Unsorted, and there is nothing to retry.
+      resting = true;
+      return;
+    }
+    if (res.status === 429) {
+      await new Promise((r) => setTimeout(r, 15_000));
       return;
     }
     if (!res.ok) return;

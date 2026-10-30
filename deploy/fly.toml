@@ -1,0 +1,30 @@
+# One Machine, one volume, no public ingress. Review before use; nothing here has been deployed.
+# There is deliberately no [http_service] and no [[services]]: Fly's proxy has nothing to route to,
+# so the app is reachable only through Tailscale Serve (see deploy/entrypoint.sh).
+app = "gloss-yorha"
+primary_region = "fra"
+
+[build]
+  # Resolved relative to the repository-root build context (`fly deploy . -c deploy/fly.toml`).
+  dockerfile = "deploy/Dockerfile"
+
+[env]
+  # Nonsecret. The secrets are set with `fly secrets set` and never written here:
+  #   GLOSS_OWNER_PASSWORD_HASH   from `npm run auth:hash`
+  #   TS_AUTHKEY                  one-time, non-reusable, pre-approved; may be removed after the first start
+  #   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, GLOSS_AI_MODEL   optional; without them AI is off
+  GLOSS_DB_PATH = "/data/gloss.sqlite"
+  TS_HOSTNAME = "gloss"
+
+[mounts]
+  # Proposed pilot: 2 GB in fra, 14-day scheduled snapshots. Fly volumes can grow, not shrink.
+  source = "gloss_data"
+  destination = "/data"
+
+[deploy]
+  # One machine holds the one volume; a rolling deploy would need a second.
+  strategy = "immediate"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1024mb"

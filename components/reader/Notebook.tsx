@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Show, SignInButton } from "@clerk/nextjs";
 import { Check, Copy, Download, Trash2, X } from "lucide-react";
 import { GlossMark } from "@/components/brand/Gloss";
 import { cmp } from "@/lib/anchor";
@@ -151,17 +150,6 @@ export function Notebook() {
               </li>
             ))}
           </ol>
-          <Show when="signed-out">
-            <p className="px-1 pb-1 pt-4 text-center text-[12.5px] leading-relaxed text-ink-3">
-              These live in this browser only.{" "}
-              <SignInButton mode="modal">
-                <button type="button" className="font-medium text-ink-2 underline decoration-rule-strong underline-offset-4 transition-colors hover:text-ink">
-                  Sign in
-                </button>
-              </SignInButton>{" "}
-              to keep them on every device.
-            </p>
-          </Show>
         </div>
       )}
     </aside>

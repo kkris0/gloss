@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { ArrowRight } from "lucide-react";
-import { SignInButton } from "@clerk/nextjs";
 import { tidyTitle } from "@/lib/article";
 import { SAMPLES } from "@/lib/samples";
 import { useStore } from "@/lib/store";
@@ -19,24 +18,11 @@ const STEPS = [
   { title: "Ask it anything", body: "The answer lands in the margin, citing the text." },
 ];
 
-function SignInLine({ children }: { children: string }) {
-  return (
-    <>
-      {children}{" "}
-      <SignInButton mode="modal">
-        <button type="button" className="font-medium text-ink-2 underline decoration-rule-strong underline-offset-4 transition-colors hover:text-ink">
-          Sign in
-        </button>
-      </SignInButton>
-    </>
-  );
-}
-
 /**
  * What lies on the desk. With highlights, they are yours: today's review while
  * one is due, otherwise the lines you marked last. Before that, how it works.
  */
-export function HomeBelow({ signedIn }: { signedIn: boolean }) {
+export function HomeBelow() {
   const hydrated = useStore((s) => s.hydrated);
   const highlights = useStore((s) => s.highlights);
   const library = useStore((s) => s.library);
@@ -61,12 +47,10 @@ export function HomeBelow({ signedIn }: { signedIn: boolean }) {
   // Held open at its full size until the shelf is read, so nothing shifts when it fills.
   if (!hydrated) return <div className="desk is-holding" aria-hidden />;
 
-  const foot = signedIn ? null : <SignInLine>{all.length ? "These live in this browser only." : "Keep your highlights on every device."}</SignInLine>;
-
-  // Before any highlights: Hassan's three steps, for first-timers and anyone signed out.
+  // Before any highlights: Hassan's three steps, for first-timers.
   if (!all.length)
     return (
-      <Desk label="How it works" foot={foot}>
+      <Desk label="How it works">
         <ol className="desk-tiles">
           {STEPS.map((s, i) => (
             <li key={s.title} className="desk-tile is-step" style={{ ["--i" as string]: i }}>
@@ -79,10 +63,10 @@ export function HomeBelow({ signedIn }: { signedIn: boolean }) {
       </Desk>
     );
 
-  if (todaysReview(all).deck.length > 0) return <DailyHighlight foot={foot} />;
+  if (todaysReview(all).deck.length > 0) return <DailyHighlight />;
 
   return (
-    <Desk label="Your latest highlights" aside={<DeskLink onClick={() => setUI({ shelf: "highlights" })}>{`All ${all.length}`}</DeskLink>} foot={foot}>
+    <Desk label="Your latest highlights" aside={<DeskLink onClick={() => setUI({ shelf: "highlights" })}>{`All ${all.length}`}</DeskLink>}>
       <ol className="desk-tiles">
         {all.slice(0, RECENT).map((h, i) => (
           <li key={h.id} style={{ ["--i" as string]: i }}>

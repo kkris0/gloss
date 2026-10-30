@@ -1,5 +1,5 @@
 import type { Action } from "./actions";
-import type { ChatMessage } from "./together";
+import type { ChatMessage } from "./models";
 
 export type DocPayload = {
   title: string;

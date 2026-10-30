@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import { Reader } from "@/components/reader/Reader";
 import { sampleById } from "@/lib/samples";
-import { OG_IMAGE } from "@/lib/brand";
 
 type Props = { params: Promise<{ id: string }> };
 
 /**
- * Samples ship with the app, so their links unfurl with the text's own title and dek.
- * Imported texts live in the browser: the reader renders their <title>, and crawlers,
- * who would only ever see "not on this device", are asked to pass them by.
+ * Samples ship with the app, so they get the text's own title. Imported texts
+ * live in the browser: the reader renders their <title>. No page here carries
+ * a social card or canonical address; the whole instance is behind the login.
  */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const a = sampleById((await params).id);
@@ -18,9 +17,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `/read/${a.id}` },
-    openGraph: { title, description, url: `/read/${a.id}`, type: "article", images: [OG_IMAGE] },
-    twitter: { card: "summary_large_image", title, description, images: [OG_IMAGE.url] },
   };
 }
 

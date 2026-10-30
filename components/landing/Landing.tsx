@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBar } from "@/components/ui/TopBar";
@@ -19,11 +18,8 @@ import { LibraryLine, type Saved } from "./LibraryLine";
 import { ShelfSheet, type ShelfItem } from "./ShelfSheet";
 
 /** One screen: a headline that shows what it does, a place to paste, and your shelf. */
-export function Landing({ signedIn: signedInAtLoad = false }: { signedIn?: boolean }) {
+export function Landing() {
   const router = useRouter();
-  // Known on the server at load, so a signed-in reader never sees the demo flash; then live, for a sign-in from this page.
-  const { isLoaded, isSignedIn } = useAuth();
-  const signedIn = isLoaded ? Boolean(isSignedIn) : signedInAtLoad;
   const hydrate = useStore((s) => s.hydrate);
   const hydrated = useStore((s) => s.hydrated);
   const library = useStore((s) => s.library);
@@ -36,7 +32,6 @@ export function Landing({ signedIn: signedInAtLoad = false }: { signedIn?: boole
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
-  const [errorNeedsKey, setErrorNeedsKey] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -86,7 +81,6 @@ export function Landing({ signedIn: signedInAtLoad = false }: { signedIn?: boole
       const r = await importFromUrl(raw, (p, label) => setBusy({ label: label ?? `Reading ${host}`, pct: p }));
       if (!r.ok) {
         setError(r.error);
-        setErrorNeedsKey(Boolean(r.needKey));
         setBusy(null);
         return;
       }
@@ -121,14 +115,12 @@ export function Landing({ signedIn: signedInAtLoad = false }: { signedIn?: boole
   const fromFile = useCallback(
     async (f: File) => {
       setError(null);
-      setErrorNeedsKey(false);
       setBusy({ label: `Opening ${f.name}`, pct: f.name.toLowerCase().endsWith(".pdf") ? 0 : undefined });
       // The PDF reader reports what it is doing: "Reading 12 pages", then any scanned ones.
       const r = await importFromFile(f, (p, label) => setBusy({ label: label ?? `Reading ${f.name}`, pct: p }));
       if (r.ok) finish(r.article, r.file);
       else {
         setError(r.error);
-        setErrorNeedsKey(Boolean(r.needKey));
         setBusy(null);
       }
     },
@@ -246,7 +238,6 @@ export function Landing({ signedIn: signedInAtLoad = false }: { signedIn?: boole
               setUrl={setUrl}
               busy={busy}
               error={error}
-              errorNeedsKey={errorNeedsKey}
               onSubmit={fromUrl}
               onSave={(u) => fromUrl(u, true)}
               onPickFile={() => fileRef.current?.click()}
@@ -255,7 +246,7 @@ export function Landing({ signedIn: signedInAtLoad = false }: { signedIn?: boole
             <LibraryLine saved={saved} />
           </Hero>
         </div>
-        <HomeBelow signedIn={signedIn} />
+        <HomeBelow />
       </main>
 
       <ShelfSheet
