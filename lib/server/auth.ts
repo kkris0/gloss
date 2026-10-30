@@ -176,19 +176,44 @@ export function csrfOk(given: string | null | undefined, session: Session): bool
 }
 
 /**
+ * The origin browsers see, from GLOSS_PUBLIC_URL. `undefined` when unset;
+ * `null` when set but not a usable http(s) URL, which refuses every request.
+ */
+function publicOrigin(): string | null | undefined {
+  const raw = process.env.GLOSS_PUBLIC_URL?.trim();
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A browser request that comes from another site is refused. `Origin`, when
- * present, must be this host; `Sec-Fetch-Site: cross-site` is refused.
+ * present, must be this site; `Sec-Fetch-Site: cross-site` is refused.
  * Requests from tools (no Origin, no Sec-Fetch-Site) pass this check and
  * still need the session and CSRF token.
+ *
+ * "This site" is the exact origin (scheme, host, port) of GLOSS_PUBLIC_URL
+ * when it is set: behind Tailscale Serve the Host header is `localhost`, and
+ * forwarded headers are client-controlled, so neither is trusted. A set but
+ * invalid GLOSS_PUBLIC_URL refuses everything. When unset, `Origin` must match
+ * the request's Host (local and dev runs).
  */
 export function sameSite(req: Request): boolean {
+  const pub = publicOrigin();
+  if (pub === null) return false;
   const site = req.headers.get("sec-fetch-site");
   if (site && site !== "same-origin" && site !== "none") return false;
   const origin = req.headers.get("origin");
   if (origin && origin !== "null") {
     try {
+      const u = new URL(origin);
+      if (pub !== undefined) return u.origin === pub && u.href === `${u.origin}/`;
       const host = req.headers.get("host");
-      if (!host || new URL(origin).host !== host) return false;
+      if (!host || u.host !== host) return false;
     } catch {
       return false;
     }

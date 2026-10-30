@@ -4,14 +4,14 @@ Gloss is a single-owner app with one SQLite file. There is no account service, n
 
 ## Settings
 
-All are runtime environment variables. None belong in Git.
+All are runtime environment variables. Secrets never belong in Git; the nonsecret `GLOSS_PUBLIC_URL` is pinned in `deploy/fly.toml` for this instance.
 
 | Variable | Needed | What it is |
 | --- | --- | --- |
 | `GLOSS_OWNER_PASSWORD_HASH` | yes | scrypt hash from `npm run auth:hash`. With none set, nobody can sign in. Single-quote it in a shell: it contains `$`. Changing it signs every session out. |
 | `GLOSS_DB_PATH` | no | SQLite file. Default `./data/gloss.sqlite`; on Fly `/data/gloss.sqlite`. |
 | `GLOSS_COOKIE_SECURE` | no | Set `false` only for plain-http local runs. Otherwise the cookie is `__Host-` prefixed and `Secure`, which needs HTTPS (Tailscale Serve provides it). |
-| `GLOSS_PUBLIC_URL` | no | This instance's address, used in the links an agent is told. |
+| `GLOSS_PUBLIC_URL` | no, but required behind Tailscale Serve | This instance's canonical address, e.g. `https://gloss.<tailnet>.ts.net`. Used in the links an agent is told, and as the one origin that login and writes accept from a browser (see below). Unset, the browser's `Origin` must match the request's `Host`. Set to something that is not an http(s) URL, every browser-origin check fails closed and login is refused. |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `GLOSS_AI_MODEL` | no | Cloudflare Workers AI, over its OpenAI-compatible endpoint. All three or AI is off. The token is read on the server only. |
 
 ## Run locally
@@ -37,6 +37,12 @@ Questions in the margin and the gloss summary, through Workers AI. Not part of t
 There is no TCP origin. A custom Next server listens only on `/run/gloss/origin.sock`; `tailscale serve --https=443` proxies that Unix socket to tailnet HTTPS. This matters because a TCP listener on loopback is not an origin-isolation boundary when tailscaled uses userspace networking. The runtime reads `tailscale serve status --json` after applying Serve and exits unless that structured state is readable and every `AllowFunnel` value is false, including configs nested under `Foreground`.
 
 The Node supervisor is PID 1 and owns both tailscaled and Next. TERM is forwarded for a graceful stop, and either child exiting makes the container exit so Fly can restart it. The owner-password login remains an independent application gate in front of the catalogue even for authenticated tailnet peers.
+
+### Why the canonical origin is configured
+
+Login and every owner write refuse a cross-site browser request by checking its `Origin` header. Locally that is compared with the request's `Host`. Behind Tailscale Serve this breaks: Serve forwards `Host: localhost` to the Unix-socket origin, so the legitimate browser `Origin: https://gloss.<tailnet>.ts.net` never equals `Host` and the login form is answered `403 Cross-site request refused.`
+
+`deploy/fly.toml` therefore sets `GLOSS_PUBLIC_URL` (nonsecret; the hostname is operational metadata, not a credential). When it is set, `Origin` must equal that URL's origin exactly (scheme, host and effective port; no path), `Sec-Fetch-Site` must still be `same-origin` or `none`, and `Host`, `X-Forwarded-Host` and `Forwarded` are ignored, because a client can set them. Requests with no `Origin` (tools) still need the session cookie and CSRF token. Changing the tailnet name or the MagicDNS hostname means updating this value, or login will be refused.
 
 The Fly config deliberately contains no `[http_service]`, `[[services]]`, public ports or public-IP allocation. Do not add a public Fly service, allocate a Fly IPv4/IPv6 address, or enable Tailscale Funnel. HTTPS exists only through Tailscale Serve on the tailnet.
 

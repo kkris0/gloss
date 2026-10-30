@@ -15,6 +15,9 @@ primary_region = "fra"
   #   CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, GLOSS_AI_MODEL   optional; without them AI is off
   GLOSS_DB_PATH = "/data/gloss.sqlite"
   TS_HOSTNAME = "gloss"
+  # The tailnet HTTPS origin browsers use. Login and writes check the browser's Origin against it, because
+  # Tailscale Serve forwards Host: localhost to the Unix-socket origin. Operational metadata, not a credential.
+  GLOSS_PUBLIC_URL = "https://gloss.tailfd74a4.ts.net"
 
 [mounts]
   # Proposed pilot: 2 GB in fra, 14-day scheduled snapshots. Fly volumes can grow, not shrink.

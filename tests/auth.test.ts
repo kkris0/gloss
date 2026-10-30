@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { cookieName, createSession, hashPassword, login, loginLockedFor, readCookie, revokeAllSessions, revokeSession, sessionCookie, sessionFor, SESSION_IDLE_MS, SESSION_MAX_MS, verifyPassword } from "../lib/server/auth";
+import { cookieName, createSession, hashPassword, login, loginLockedFor, readCookie, revokeAllSessions, revokeSession, sameSite, sessionCookie, sessionFor, SESSION_IDLE_MS, SESSION_MAX_MS, verifyPassword } from "../lib/server/auth";
 import { isOpenPath } from "../lib/server/gate";
 import { owner } from "../lib/server/guard";
 import { sqlite } from "../lib/server/sqlite";
@@ -162,6 +162,57 @@ describe("route guard", () => {
       assert.equal(!g.ok && g.res.status, 403, JSON.stringify(extra));
     }
     assert.ok(owner(req("POST", token, { ...h, "sec-fetch-site": "same-origin", origin: "http://gloss.test" })).ok);
+  });
+  describe("with GLOSS_PUBLIC_URL configured (Tailscale Serve forwards Host: localhost)", () => {
+    const PUBLIC = "https://gloss.tailfd74a4.ts.net";
+    const proxied = (headers: Record<string, string> = {}) => ({ host: "localhost", "sec-fetch-site": "same-origin", origin: PUBLIC, ...headers });
+    beforeEach(() => {
+      process.env.GLOSS_PUBLIC_URL = PUBLIC;
+    });
+    afterEach(() => {
+      delete process.env.GLOSS_PUBLIC_URL;
+    });
+
+    it("accepts the exact canonical origin although Host is localhost", () => {
+      assert.ok(sameSite(req("POST", null, proxied())));
+      assert.ok(sameSite(req("POST", null, proxied({ origin: `${PUBLIC}:443` }))), "explicit default port is the same origin");
+      assert.ok(sameSite(req("POST", null, { host: "localhost" })), "tools send no Origin and still need session + CSRF");
+    });
+    it("lets the owner write with a valid session and CSRF token", () => {
+      const { token, session } = createSession();
+      assert.ok(owner(req("POST", token, proxied({ "x-gloss-csrf": session.csrf }))).ok);
+      const noCsrf = owner(req("POST", token, proxied()));
+      assert.equal(!noCsrf.ok && noCsrf.res.status, 403);
+    });
+    it("refuses a wrong origin, another scheme, another port, and a path-bearing origin", () => {
+      for (const origin of ["https://evil.example", "http://gloss.tailfd74a4.ts.net", "https://gloss.tailfd74a4.ts.net:8443", "https://evil.gloss.tailfd74a4.ts.net", "https://gloss.tailfd74a4.ts.net/x", "http://localhost", "null", "not a url"])
+        assert.equal(sameSite(req("POST", null, proxied({ origin }))), false, origin);
+    });
+    it("refuses an Origin that matches only the request Host", () => {
+      assert.equal(sameSite(req("POST", null, { host: "gloss.test", origin: "http://gloss.test" })), false);
+    });
+    it("still refuses cross-site and same-site fetch metadata", () => {
+      for (const site of ["cross-site", "same-site"]) assert.equal(sameSite(req("POST", null, proxied({ "sec-fetch-site": site }))), false, site);
+    });
+    it("does not trust forwarded host headers", () => {
+      for (const h of ["x-forwarded-host", "forwarded", "x-original-host", "x-forwarded-proto"]) {
+        const evil = { "x-forwarded-host": "evil.example", forwarded: "host=evil.example;proto=https", "x-original-host": "evil.example", "x-forwarded-proto": "https" }[h]!;
+        assert.equal(sameSite(req("POST", null, { host: "localhost", "sec-fetch-site": "same-origin", origin: "https://evil.example", [h]: evil })), false, h);
+      }
+    });
+    it("fails closed when the configured URL is not a usable http(s) origin", () => {
+      for (const bad of ["gloss.tailfd74a4.ts.net", "ftp://gloss.example", "javascript:alert(1)", "https://", "://x"]) {
+        process.env.GLOSS_PUBLIC_URL = bad;
+        assert.equal(sameSite(req("POST", null, proxied())), false, bad);
+        assert.equal(sameSite(req("POST", null, { host: "gloss.test", origin: "http://gloss.test" })), false, `${bad} (host match)`);
+        assert.equal(sameSite(req("POST", null, { host: "gloss.test" })), false, `${bad} (no origin)`);
+      }
+    });
+    it("treats a blank value as unset", () => {
+      process.env.GLOSS_PUBLIC_URL = "  ";
+      assert.ok(sameSite(req("POST", null, { origin: "http://gloss.test" })));
+      assert.equal(sameSite(req("POST", null, proxied())), false);
+    });
   });
   it("is not fooled by forwarded-for or tailnet identity headers", () => {
     const g = owner(req("GET", null, { "x-forwarded-for": "127.0.0.1", "tailscale-user-login": "owner@example.com", "x-real-ip": "100.64.0.1" }));
