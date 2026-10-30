@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -25,6 +25,14 @@ test("Fly has no public service or Funnel and Serve targets the Unix origin", ()
   assert.doesNotMatch(deployment, /tailscale\s+funnel/);
   assert.match(deployment, /"serve"[\s\S]*"--https=443"[\s\S]*originTarget/);
   assert.match(deployment, /"unix:\/run\/gloss\/origin\.sock"/);
+});
+
+test("Fly resolves the Dockerfile next to its config and keeps the tailnet Machine running", () => {
+  const fly = source("deploy/fly.toml").replace(/^\s*#.*$/gm, "");
+  const dockerfile = fly.match(/^\s*dockerfile\s*=\s*"([^"]+)"/m)?.[1];
+  assert.ok(dockerfile);
+  assert.ok(existsSync(join(root, "deploy", dockerfile)));
+  assert.match(fly, /\[\[restart\]\][\s\S]*?policy\s*=\s*"always"/);
 });
 
 test("the Next origin listens only on its Unix socket", () => {

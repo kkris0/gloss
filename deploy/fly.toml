@@ -5,8 +5,8 @@ app = "gloss-yorha"
 primary_region = "fra"
 
 [build]
-  # Resolved relative to the repository-root build context (`fly deploy . -c deploy/fly.toml`).
-  dockerfile = "deploy/Dockerfile"
+  # Fly resolves this relative to deploy/fly.toml, not the repository-root context.
+  dockerfile = "Dockerfile"
 
 [env]
   # Nonsecret. The secrets are set with `fly secrets set` and never written here:
@@ -24,6 +24,10 @@ primary_region = "fra"
 [deploy]
   # One machine holds the one volume; a rolling deploy would need a second.
   strategy = "immediate"
+
+[[restart]]
+  # Direct tailnet traffic cannot wake a stopped Machine.
+  policy = "always"
 
 [[vm]]
   size = "shared-cpu-1x"
