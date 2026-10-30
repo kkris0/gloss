@@ -40,15 +40,14 @@ The Node supervisor is PID 1 and owns both tailscaled and Next. TERM is forwarde
 
 The Fly config deliberately contains no `[http_service]`, `[[services]]`, public ports or public-IP allocation. Do not add a public Fly service, allocate a Fly IPv4/IPv6 address, or enable Tailscale Funnel. HTTPS exists only through Tailscale Serve on the tailnet.
 
-## Human provisioning and secret gate
+## Provisioned infrastructure and human secret gate
 
-Provisioning is deliberately not automated here. A human must:
+After explicit approval on 2026-10-30, the `gloss-yorha` app was created in the Fly `personal` org without any public IP, and exactly one encrypted 2 GB volume, `gloss_data` (`vol_r68608dq65xnw7d4`), was created in `fra` with 14-day scheduled snapshots. No Machine or public Fly service has been deployed yet. The proposed one-machine pilot is about $8.03 per 30 days before Cloudflare AI usage, outbound traffic and any additional snapshot charges; the volume itself may already accrue charges. Before the first deployment, the human owner must:
 
-1. After explicit cost approval, create the proposed `gloss-yorha` app in the `personal` org without a public service or IP, and exactly one 2 GB volume in `fra` named `gloss_data` (14-day scheduled snapshots). The proposed one-machine pilot is about $8.03 per 30 days before Cloudflare AI usage and outbound traffic; no resources have been created.
-2. Generate `GLOSS_OWNER_PASSWORD_HASH` interactively with `npm run auth:hash` and store the hash as a Fly secret. The container refuses to start without it.
-3. Create a one-time, non-reusable, pre-approved Tailscale auth key and store it as `TS_AUTHKEY` for the first start. Remove that secret after `/data/tailscale/tailscaled.state` has persisted the node identity.
-4. Optionally set all three AI variables listed above. Partial AI credentials leave AI disabled.
-5. Review the tailnet device approval, ACL/grant policy and HTTPS certificate behavior before treating the instance as available.
+1. Generate `GLOSS_OWNER_PASSWORD_HASH` interactively with `npm run auth:hash` and store the resulting hash as a Fly secret for `gloss-yorha` in the private Fly dashboard. The container refuses to start without it.
+2. In Tailscale admin, prepare a one-time, non-reusable, pre-approved auth key tagged `tag:gloss`, and store it as the `TS_AUTHKEY` Fly secret. Enable tailnet HTTPS and review the device approval and policy. A narrow grant allowing the intended owner to `tag:gloss` on `tcp:443` does **not** override an existing broad/wildcard grant; inspect the effective policy before relying on it.
+3. Tell the operator only that these two named keys are staged, without sending the values. The operator can then deploy one Machine with `--ha=false --no-public-ips`, verify private access, restart persistence and removal of the bootstrap key. Do not remove `TS_AUTHKEY` until the persisted node identity has been verified after a Machine restart.
+4. Optionally store all three Cloudflare AI variables listed above; partial AI configuration leaves inference disabled. A live Workers AI call is a separate acceptance step.
 
 Never put a password, password hash, auth key, API token, Goodreads export or other credential in Git, an image layer, a command transcript or this file.
 
@@ -66,7 +65,7 @@ sudo -n docker build -f deploy/Dockerfile -t gloss-selfhost:local .
 
 An image smoke test should override the entrypoint so it does not join a tailnet. Start only the custom server with a synthetic test password hash, mount a temporary `/run/gloss`, request `/api/health` and the unauthenticated `/api/catalog` through the Unix socket, and inspect the container network namespace to confirm there is no TCP origin listener. This is a local implementation check; it does not prove tailnet policy, Fly IP allocation, DNS or outside-tailnet reachability.
 
-Local verification on 2026-10-30: 87 tests passed; TypeScript, Next production build, Fly config validation and the ARM64 Docker build passed. A network-disabled container answered health (200), rejected the unauthenticated catalogue (401), served the login page (401), exposed the Unix socket and had no TCP listener. A second container test used only a synthetic password and CSV: login and import succeeded, and five catalogue records remained after container recreation on the same temporary volume. Simulated HTTPS proxy headers produced a Secure `__Host-` cookie; a write without CSRF failed (403) while the CSRF-correct synthetic import succeeded. None of this proves Fly/Tailscale runtime isolation or Cloudflare inference.
+Local verification on 2026-10-30: 87 tests passed; TypeScript, Next production build, Fly config validation and the ARM64 Docker build passed. A network-disabled container answered health (200) and the home page (200), rejected the unauthenticated catalogue (401), exposed the Unix socket and had no TCP listener. A second container test used only a synthetic password and CSV: login and import succeeded, and five catalogue records remained after container recreation on the same temporary volume. Simulated HTTPS proxy headers produced a Secure `__Host-` cookie; a write without CSRF failed (403) while the CSRF-correct synthetic import succeeded. None of this proves Fly/Tailscale runtime isolation or Cloudflare inference.
 
 ## Live acceptance (human, after deployment)
 
@@ -80,4 +79,4 @@ Do not call the deployment accepted until a human verifies all of the following 
 - `/api/health` is reachable as intended, `/api/catalog` is rejected before login, and the owner can sign in with the separately provisioned password.
 - Restarting the Machine preserves both the Tailscale identity and SQLite data on `/data`, and killing either tailscaled or Next causes Fly to restart the container.
 
-None of those live acceptance gates is established by a local build, and no app, Machine, volume, secret, public IP, gateway or tailnet setting is created or changed by the files in this repository.
+None of those live acceptance gates is established by a local build. The approved app and volume were provisioned separately through Fly CLI; these repository files do not create a Machine, secret, public IP, gateway or tailnet setting on their own.
