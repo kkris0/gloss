@@ -28,13 +28,15 @@ Library → **Goodreads** → *Import a Goodreads CSV*. The importer reads the 3
 
 On 2026-10-30 the real 543-row export was imported using the existing `importCatalog` implementation over private Fly SSH after a clean off-Fly backup/restore drill. All 543 rows were added, none skipped or duplicated, and a read-only production count and the catalogue query both returned 543. The original CSV remained untouched and was not committed; the temporary server-side import copy was removed. This verifies the server-side importer, **not** the browser file-upload flow, which the owner should still try on a future export.
 
+On 2026-10-31 the owner asked to remove the imported catalogue again. A guarded transaction deleted that import's single `catalog_imports` row and all 543 `catalog_books` rows; the readback confirmed both catalogue tables at zero with every other table and SQLite integrity unchanged. The importer itself is unchanged, and a future export can be imported the same way.
+
 ## What AI covers
 
 Questions in the margin and the gloss summary, through Workers AI. Not part of this deployment, and shown as unavailable: reading aloud, painted covers, scanned-PDF page reading, "read it more carefully", and web search.
 
 ## Fly + Tailscale architecture (private pilot deployed)
 
-`deploy/` describes one always-on Fly Machine in `fra`, with 1 GB RAM and one Fly Volume mounted at `/data`. SQLite is `/data/gloss.sqlite`, and Tailscale keeps its node identity under `/data/tailscale`.
+`deploy/` describes one always-on Fly Machine in `fra`, with 1 GB RAM and one Fly Volume mounted at `/data`. SQLite is `/data/gloss.sqlite`, and Tailscale keeps its node identity under `/data/tailscale`. Since 2026-10-31 that Machine is stopped at the owner's request (see *Pilot suspended* below); the architecture itself is unchanged for when it runs.
 
 There is no TCP origin. A custom Next server listens only on `/run/gloss/origin.sock`; `tailscale serve --https=443` proxies that Unix socket to tailnet HTTPS. This matters because a TCP listener on loopback is not an origin-isolation boundary when tailscaled uses userspace networking. The runtime reads `tailscale serve status --json` after applying Serve and exits unless that structured state is readable and every `AllowFunnel` value is false, including configs nested under `Foreground`.
 
@@ -50,7 +52,7 @@ The Fly config deliberately contains no `[http_service]`, `[[services]]`, public
 
 ## Provisioned infrastructure and human secret gate
 
-After explicit approval on 2026-10-30, `gloss-yorha` was created in the Fly `personal` org without any public IP. One encrypted 2 GB volume, `gloss_data` (`vol_r68608dq65xnw7d4`), was created in `fra` with 14-day scheduled snapshots and attached to one running `shared-cpu-1x`/1 GB Machine. The one-machine pilot is about $8.03 per 30 days before Cloudflare AI usage, outbound traffic and any additional snapshot charges. The human owner staged the required two bootstrap secrets before deployment:
+After explicit approval on 2026-10-30, `gloss-yorha` was created in the Fly `personal` org without any public IP. One encrypted 2 GB volume, `gloss_data` (`vol_r68608dq65xnw7d4`), was created in `fra` with 14-day scheduled snapshots and attached to one running `shared-cpu-1x`/1 GB Machine. The one-machine pilot is about $8.03 per 30 days while running, before Cloudflare AI usage, outbound traffic and any additional snapshot charges. Since 2026-10-31 the Machine is stopped, so the running compute portion is $0; the volume, the stopped Machine's rootfs and snapshot storage continue to bill. The human owner staged the required two bootstrap secrets before deployment:
 
 1. `GLOSS_OWNER_PASSWORD_HASH` was generated privately with `npm run auth:hash`. The container refuses to start without it; the operator has not read the password or hash.
 2. `TS_AUTHKEY` was staged privately for Tailscale bootstrap. The Machine restarted successfully and retained its tailnet name and state file. With the owner's explicit approval, the bootstrap secret was removed. The Machine remained running, the secret name was absent on readback, and tailnet HTTPS health still returned 200 after removal.
@@ -64,6 +66,18 @@ Never put a password, password hash, auth key, API token, Goodreads export or ot
 The `/data/gloss.sqlite` database uses WAL. Before the import, a consistent SQLite backup was made via Node's `node:sqlite.backup()`, transferred over Fly SSH/SFTP to an owner-only off-Fly file (mode `0600`), restored into a separate local database, and checked for integrity, schema version, row count and a synthetic write. The same drill after the import restored a **543-book** copy, and the catalogue query on that restored copy returned 543. The production database was never replaced. The pre/post-import backups are stored outside the repository with owner-only permissions; they contain private library data and login-session metadata, so they need an encrypted long-term backup plan rather than a public/shared location.
 
 A second manual Fly snapshot, `vs_aRB8jem1q9JtMkX4X4OqYGp`, is `created` after the import; automatic volume snapshots retain 14 days. **Restoring a Fly volume from a snapshot has not been drilled** (that would provision another billable volume), and the Tailscale identity on `/data/tailscale` was not copied off Fly. For a future recovery, never run the original and a restored Tailscale state concurrently.
+
+## Pilot suspended (2026-10-31)
+
+After the pilot was verified end to end, the owner chose to stop paying for the always-on Machine. `fly machine stop 185d133a601568 --app gloss-yorha` stopped the single Machine; the app, its secrets, the `gloss_data` volume (`vol_r68608dq65xnw7d4`), the SQLite database and the Tailscale identity on `/data/tailscale` are all retained, and `tag:gloss` remains on the now-offline node. A manually stopped Machine is not restarted by `restart = always`, and because ingress is tailnet-only, a stopped Machine is simply unreachable — expected while suspended, and it can never be woken by traffic.
+
+To resume:
+
+```sh
+HOME=/home/ubuntu /home/ubuntu/.fly/bin/flyctl machine start 185d133a601568 --app gloss-yorha
+```
+
+Expect one to two minutes to boot, re-establish the tailnet identity and re-apply Serve, then verify `https://gloss.tailfd74a4.ts.net/api/health` returns 200 from an authorized peer.
 
 ## Local validation (does not prove live isolation)
 
